@@ -13,9 +13,7 @@ body {
     color: black;
 }
 
-h1 {
-    margin-top: 10px;
-}
+h1 { margin-top: 10px; }
 
 .top-bar {
     display: flex;
@@ -23,7 +21,6 @@ h1 {
     padding: 10px 20px;
 }
 
-/* 卡片 */
 .cards {
     display: flex;
     justify-content: center;
@@ -35,6 +32,305 @@ h1 {
     width: 80px;
     height: 100px;
     background: white;
+    border-radius: 12px;
+    box-shadow: 2px 4px 10px rgba(0,0,0,0.2);
+    font-size: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.expression {
+    margin: 20px auto;
+    width: 60%;
+    min-height: 50px;
+    border: 2px dashed black;
+    border-radius: 10px;
+    font-size: 22px;
+    padding: 10px;
+    background: white;
+}
+
+button {
+    margin: 5px;
+    padding: 10px 15px;
+    font-size: 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    background: white;
+}
+
+.big-btn {
+    font-size: 22px;
+    padding: 15px 40px;
+}
+
+.result {
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.correct {
+    color: green;
+    animation: pop 0.3s ease;
+}
+
+.wrong { color: red; }
+
+@keyframes pop {
+    0% {transform: scale(0.8);}
+    100% {transform: scale(1);}
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top:0; left:0;
+    width:100%; height:100%;
+    background: rgba(0,0,0,0.5);
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    width: 60%;
+}
+</style>
+</head>
+
+<body>
+
+<h1>ランダム24点</h1>
+
+<div class="top-bar">
+    <button onclick="openRule()">ルール</button>
+    <div>
+        Score: <span id="score">0</span>　
+        Clear: <span id="clearCount">0</span>
+    </div>
+</div>
+
+<div class="cards">
+    <div class="card" id="n1"></div>
+    <div class="card" id="n2"></div>
+    <div class="card" id="n3">?</div>
+    <div class="card" id="n4">?</div>
+</div>
+
+<button onclick="stopRoll()">STOP</button>
+
+<div class="expression" id="expr"></div>
+
+<div id="numArea" style="display:none;"></div>
+
+<button onclick="deleteLast()">← DEL</button>
+
+<div>
+    <button class="big-btn" onclick="check()">判定</button>
+    <button onclick="impossible()">不可能</button>
+</div>
+
+<div>スコア使い</div>
+<div>
+    <button onclick="reroll()">再抽選 (-5)</button>
+    <button onclick="skip()">Skip (-5)</button>
+</div>
+
+<div class="result" id="result"></div>
+
+<!-- 规则 -->
+<div class="modal" id="ruleModal">
+  <div class="modal-content">
+    <h3>ルール</h3>
+    <p>
+    前2つは固定、後2つは抽選。<br>
+    4つすべて使って24を作る。<br>
+    正解+10点（同数字で倍率あり）<br>
+    不可能なら「不可能」ボタン<br>
+    再抽選/Skip：-5点
+    </p>
+    <button onclick="closeRule()">閉じる</button>
+  </div>
+</div>
+
+<!-- 通关 -->
+<div class="modal" id="clearModal">
+  <div class="modal-content">
+    <h2>おめでとう！クリア！</h2>
+    <button onclick="endGame()">終了</button>
+    <button onclick="restartGame()">もう一回</button>
+  </div>
+</div>
+
+<script>
+let nums = [];
+let score = 0;
+let clearCount = 0;
+let rolling = true;
+let rollIndex = 2;
+let rollInterval;
+let used = [];
+let exprTokens = [];
+
+function rand() {
+    return Math.floor(Math.random()*10)+1;
+}
+
+function init() {
+    nums = [rand(), rand(), 0, 0];
+    used = [0,0,0,0];
+    exprTokens = [];
+
+    document.getElementById("n1").innerText = nums[0];
+    document.getElementById("n2").innerText = nums[1];
+    document.getElementById("n3").innerText = "?";
+    document.getElementById("n4").innerText = "?";
+
+    document.getElementById("numArea").style.display="none";
+    document.getElementById("expr").innerText="";
+
+    rollIndex = 2;
+    startRoll();
+}
+
+function startRoll() {
+    rolling = true;
+    rollInterval = setInterval(()=>{
+        document.getElementById("n"+(rollIndex+1)).innerText = rand();
+    },1);
+}
+
+function stopRoll() {
+    if(!rolling) return;
+
+    clearInterval(rollInterval);
+    nums[rollIndex] = parseInt(document.getElementById("n"+(rollIndex+1)).innerText);
+
+    rollIndex++;
+
+    if(rollIndex <=3){
+        startRoll();
+    }else{
+        rolling = false;
+        generateButtons();
+    }
+}
+
+function generateButtons(){
+    let area = document.getElementById("numArea");
+    area.innerHTML = "";
+
+    nums.forEach((n,i)=>{
+        let btn = document.createElement("button");
+        btn.innerText = n;
+        btn.onclick = ()=>addNumber(i);
+        area.appendChild(btn);
+    });
+
+    ["+","-","*","/","(",")"].forEach(op=>{
+        let btn = document.createElement("button");
+        btn.innerText = op;
+        btn.onclick = ()=>addOp(op);
+        area.appendChild(btn);
+    });
+
+    area.style.display="block";
+}
+
+function addNumber(index){
+    if(used[index] >= 1) return;
+
+    used[index]++;
+    exprTokens.push({type:"num", index:index});
+    updateExpr();
+}
+
+function addOp(op){
+    exprTokens.push({type:"op", value:op});
+    updateExpr();
+}
+
+function updateExpr(){
+    let str="";
+    exprTokens.forEach(t=>{
+        if(t.type==="num") str+=nums[t.index];
+        else str+=t.value;
+    });
+    document.getElementById("expr").innerText=str;
+}
+
+function deleteLast(){
+    if(exprTokens.length===0) return;
+
+    let last = exprTokens.pop();
+    if(last.type==="num"){
+        used[last.index]--;
+    }
+    updateExpr();
+}
+
+function calcMultiplier(){
+    let count = {};
+    nums.forEach(n=>{
+        count[n]=(count[n]||0)+1;
+    });
+    let maxDup = Math.max(...Object.values(count));
+    return maxDup > 1 ? maxDup : 1;
+}
+
+function check() {
+    let exp = document.getElementById("expr").innerText;
+
+    if(used.filter(x=>x===1).length !== 4){
+        document.getElementById("result").innerText="4つ全部使って！";
+        document.getElementById("result").className="result wrong";
+        return;
+    }
+
+    try {
+        let val = eval(exp);
+        if(Math.abs(val-24)<0.001){
+
+            let multi = calcMultiplier();
+            let gain = 10 * multi;
+            score += gain;
+
+            document.getElementById("result").innerText=
+                "正解！ +" + gain + (multi>1?" (x"+multi+")":"");
+
+            document.getElementById("result").className="result correct";
+
+            if(score >= 100){
+                document.getElementById("clearModal").style.display="flex";
+            }else{
+                nextRound();
+            }
+
+        } else {
+            document.getElementById("result").innerText="不正解";
+            document.getElementById("result").className="result wrong";
+        }
+    } catch {
+        document.getElementById("result").innerText="エラー";
+    }
+    document.getElementById("score").innerText=score;
+}
+
+function impossible(){
+    if(canMake24(nums)){
+        document.getElementById("result").innerText="作れるよ！";
+        document.getElementById("result").className="result wrong";
+    }else{
+        score+=10;
+        document.getElementById("result").innerText="正解！（不可能）+10";
+        document.getElementById("result").className="result correct";
+
+        if(score >= 100){
+            documen    background: white;
     border-radius: 12px;
     box-shadow: 2px 4px 10px rgba(0,0,0,0.2);
     font-size: 32px;
