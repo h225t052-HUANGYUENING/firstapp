@@ -1,1 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ランダム24ゲーム</title>
+<style>
+    body {
+        font-family: sans-serif;
+        text-align: center;
+        background: #f5f5f5;
+    }
+    .card {
+        display: inline-block;
+        width: 70px;
+        height: 100px;
+        margin: 10px;
+        line-height: 100px;
+        font-size: 28px;
+        border-radius: 12px;
+        background: white;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .fixed {
+        border: 3px solid #444;
+    }
+    .gacha {
+        border: 3px dashed #888;
+    }
+    button {
+        margin: 5px;
+        padding: 10px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+    }
+    input {
+        padding: 10px;
+        width: 200px;
+    }
+</style>
+</head>
 
+<body>
+
+<h2>🎴 ランダム24ゲーム</h2>
+<p>スコア: <span id="score">0</span> / 100</p>
+
+<div id="cards"></div>
+
+<input id="expression" placeholder="例: (a+b)*c-d">
+<button onclick="check()">判定</button>
+
+<h3>機能</h3>
+<div id="banArea"></div>
+<button onclick="skip()">スキップ (-5)</button>
+<button onclick="rerollShop()">ショップ再抽選 (-10)</button>
+<button onclick="replaceNumber()">数字入れ替え (-10)</button>
+
+<p id="message"></p>
+
+<script>
+let score = 0;
+let numbers = [];
+let banUsed = false;
+let bannedOp = null;
+
+function rand() {
+    return Math.floor(Math.random() * 9) + 1;
+}
+
+function newRound() {
+    numbers = [rand(), rand(), rand(), rand()];
+    banUsed = false;
+    bannedOp = null;
+    render();
+}
+
+function render() {
+    document.getElementById("score").innerText = score;
+
+    let html = "";
+    numbers.forEach((n, i) => {
+        let cls = i < 2 ? "card fixed" : "card gacha";
+        html += `<div class="${cls}">${n}</div>`;
+    });
+    document.getElementById("cards").innerHTML = html;
+
+    document.getElementById("banArea").innerHTML = 
+        ["+", "-", "*", "/"].map(op =>
+            `<button onclick="ban('${op}')">${op} Ban</button>`
+        ).join("");
+}
+
+function check() {
+    let exp = document.getElementById("expression").value;
+
+    try {
+        if (bannedOp && exp.includes(bannedOp)) {
+            msg("❌ 禁止された演算子を使用しています");
+            return;
+        }
+
+        let used = numbers.map(n => n.toString());
+        let temp = exp;
+
+        for (let n of used) {
+            temp = temp.replace(n, "");
+        }
+
+        if (temp.match(/[0-9]/)) {
+            msg("❌ 数字を正しく使っていません");
+            return;
+        }
+
+        let result = eval(exp);
+
+        if (Math.abs(result - 24) < 0.0001) {
+            score += 10;
+            msg("✅ 正解！+10点");
+            if (score >= 100) {
+                msg("🎉 YOU WIN!");
+                return;
+            }
+            newRound();
+        } else {
+            msg("❌ 24になりません");
+        }
+
+    } catch {
+        msg("❌ 式エラー");
+    }
+}
+
+function ban(op) {
+    if (banUsed) return;
+    bannedOp = op;
+    banUsed = true;
+    numbers[2] = rand();
+    numbers[3] = rand();
+    msg(`⚠ ${op} が禁止されました & 再抽選`);
+    render();
+}
+
+function skip() {
+    score = Math.max(0, score - 5);
+    newRound();
+}
+
+function rerollShop() {
+    if (score < 10) return msg("❌ ポイント不足");
+    score -= 10;
+    numbers[2] = rand();
+    numbers[3] = rand();
+    render();
+}
+
+function replaceNumber() {
+    if (score < 10) return msg("❌ ポイント不足");
+    score -= 10;
+    let index = prompt("どのカードを交換？(0-3)");
+    if (index >= 0 && index < 4) {
+        numbers[index] = rand();
+    }
+    render();
+}
+
+function msg(t) {
+    document.getElementById("message").innerText = t;
+}
+
+newRound();
+</script>
+
+</body>
+</html>
